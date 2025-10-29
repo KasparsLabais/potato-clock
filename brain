@@ -1,0 +1,23 @@
+#!/usr/bin/env php
+<?php 
+
+include './autoloader.php';
+
+$autoloader = new TwitchAutoloader();
+$autoloader->register();
+
+
+use App\Console\Kernal;
+use App\Console\Application;
+
+
+$nameSpace = "App\\Console\\Commands\\";
+$argv = $_SERVER['argv'] ?? [];
+
+
+$application = new Application($nameSpace, $argv);
+$kernal = new Kernal($application);
+
+$status = $kernal->handle();
+
+exit($status);

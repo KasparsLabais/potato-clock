@@ -4,7 +4,8 @@ class TwitchAutoloader {
 
     private $prefixes = [
         'App\\Twitch\\' => __DIR__ . '/app/Twitch/',
-        'App\\Controller\\' => __DIR__ . '/app/Controller/'
+        'App\\Controller\\' => __DIR__ . '/app/Controller/',
+        'App\\Console\\' => __DIR__ . '/app/Console/'
     ];
 
 
@@ -13,7 +14,7 @@ class TwitchAutoloader {
     }
 
     public function loadClass($class): bool {
-        
+
         if (!($classPath = $this->isKnownPrefix($class))) {
             return false;
         }
@@ -27,7 +28,7 @@ class TwitchAutoloader {
             return false;
         }
 
-        
+       
         require $filePath;
         return true;
     }

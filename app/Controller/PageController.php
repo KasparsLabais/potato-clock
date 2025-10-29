@@ -10,7 +10,7 @@ class PageController extends Controller {
 
     public function index() 
     {
-        return View::render('pages.index', []);
+        return View::render('pages.index', ['title' => 'Twitch Page', 'dynamicTitle' => 'Im changing title']);
     }
 
 }

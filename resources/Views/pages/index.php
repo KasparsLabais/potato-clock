@@ -2,6 +2,6 @@
 @section('body')
 
 
-<h1>Just testing render</h1>
+<h1>Just testing render @var('dynamicTitle')</h1>
 
 @endsection

@@ -3,6 +3,7 @@
 
 namespace App\Twitch\Controller;
 
+use DateTimeZone;
 use SplFileInfo;
 
 
@@ -26,14 +27,19 @@ class View {
 
 
         $fileContent = self::findOrCreateCachedFile($fullFilePath);
-
-        // var_dump($fileGetContent);die
+        foreach($data as $key => $d) {
+            $searchVariable = "@var('{$key}')";
+            $fileContent = str_replace($searchVariable, $d, $fileContent);
+        }
 
 
         // ob_start('App\Twitch\Controller\View::parseView');
 
         // require $fullFilePath;
         // $content = ob_get_contents();
+        ob_start();
+        echo $fileContent;
+        $content = ob_get_contents();
 
         return $content;
     }
@@ -58,9 +64,9 @@ class View {
     public static function findOrCreateCachedFile(string $fullFilePath) : string
     {
 
-        $cacheFileName = md5($fullFilePath);
-        if (self::hasValidCacheFile($cacheFileName)) {
-            //If true we return a already pre-generated file 
+        
+        if (self::hasValidCacheFile($fullFilePath)) {
+            return self::loadCachedFile($fullFilePath);
         }
 
 
@@ -68,6 +74,9 @@ class View {
         // Check for @section
         $extends = null; 
         $section = null;
+
+        $sectionContent = [];
+        $sectionContentStarted = false;
 
         $extendsSectionEnabled = false;
 
@@ -79,6 +88,16 @@ class View {
         $totalContentLength = 0;
 
         foreach($fileLines as $line) {
+
+
+            if($sectionContentStarted && strpos($line, '@endsection') === 0) {
+                $sectionContentStarted = false;
+            }     
+
+            if ($sectionContentStarted) {
+                $sectionContent[] = $line;
+            } 
+
 
             if(strpos($line, '@extends') === 0) {
                 if ($totalContentLength > 0) {
@@ -94,12 +113,16 @@ class View {
             if(strpos($line, '@section') === 0 && !$extendsSectionEnabled) {
                 //We want only throw error if condition 2 does not apply
                 die('Fatal error: there is no extend section but have body section');
+            } elseif (strpos($line, '@section') === 0 && $extendsSectionEnabled) {
+                $section = trim(str_replace(array('@section', '(', ')', '\''), '', $line));
+                $sectionContentStarted = true;
             }
-            
+
+       
 
             $totalContentLength = strlen(string: $line);
-
         }
+
 
         if($extendsSectionEnabled) {
             //we need to preload layout file first 
@@ -109,35 +132,98 @@ class View {
             //TODO: cant use extend as it is as it would or ciould hold a path to folders
             $layoutFulFilePath = $layoutFilePath . $extends; 
 
-            var_dump(file_exists($layoutFulFilePath));
-            var_dump($fullFilePath);
-            var_dump($layoutFulFilePath);
-            $layoutFile = file_get_contents($layoutFulFilePath);
-            var_dump($layoutFile);die();
+            // var_dump(file_exists(filename: $fullFilePath), "<br>");
+            // var_dump($fullFilePath . "<br>");
+            // var_dump(file_exists(filename: trim($layoutFulFilePath)), "<br>");
+            // var_dump($layoutFulFilePath, "<br>");
+
         
+            $layoutFile = file(trim($layoutFulFilePath));
+            $newFile = [];
+
+
+
+            foreach ($layoutFile as $value) {
+                if (str_contains(trim($value), "@holder('{$section}')")) {
+                    foreach($sectionContent as $sectionLine) {
+                        $newFile[] = $sectionLine;
+                    }
+                } else {
+                    $newFile[] = $value;
+                }
+            }
+
+    
+        } else {
+            //TODO: add functionality if file is not mixin
         }
 
-
-        // foreach($fileContent as $ct) {
-        //     var_dump($ct);die();
-        // }
-        //var_dump($fileContent);die();
-        die();
+        $cachedFiled = self::createCachedFile($fullFilePath, $newFile);
+        return $cachedFiled;
     }
 
-    public static function hasValidCacheFile(string $cachedFileName) : bool 
+    public static function hasValidCacheFile(string $filePath) : bool 
     {
-        if(file_exists($cachedFileName)) {
+
+        //TODO: make cache file based on extension
+        $cacheFileName = md5($filePath) . '.php';
+        
+        $basePath = __DIR__ . '/../../../storage/Views/';
+        $cachedFileFullPath = $basePath . $cacheFileName;
+
+        if(file_exists($cachedFileFullPath)) {
             
-            $fileInfo = new SplFileInfo($cachedFileName);
-            var_dump($fileInfo);die();
+            $fileInfo = new SplFileInfo($cachedFileFullPath);
+            
+
+            $dateNow = new \DateTime('NOW', new DateTimeZone('UTC'));
+
+            $fileCreationT = new \DateTime();
+            $fileCreationT->setTimestamp($fileInfo->getMTime());
+            $fileCreationT->setTimezone(new DateTimeZone('UTC'));
 
 
-            return true;
+            //TODO: get cach allowed time from config
+            $allowedCacheTime = (60*10); // 10 minutes
+
+            $timeDiff = $dateNow->getTimestamp() - $fileCreationT->getTimestamp();
+
+            if ($timeDiff < $allowedCacheTime) {
+                return true;
+            } 
+
+            //IF file is expired, we need to delete it first
+            unlink($cachedFileFullPath);
         }
 
 
         return false;
+    }
+
+    public static function createCachedFile(string $filePath, array $fileData) : string {
+
+
+        $cacheFileName = md5($filePath) . '.php';
+        
+        $basePath = __DIR__ . '/../../../storage/Views/';
+        $cachedFileFullPath = $basePath . $cacheFileName;
+
+        $cachFile = fopen($cachedFileFullPath, 'a');
+        foreach($fileData as $data) {
+            fwrite($cachFile, $data);
+        }
+
+        fclose($cachFile);
+        return file_get_contents($cachedFileFullPath);
+    }
+
+    public static function loadCachedFile(string $filePath) : string {
+        $cacheFileName = md5($filePath) . '.php';
+        
+        $basePath = __DIR__ . '/../../../storage/Views/';
+        $cachedFileFullPath = $basePath . $cacheFileName;
+
+        return file_get_contents($cachedFileFullPath);
     }
 
     public static function parseView($buffer) 
